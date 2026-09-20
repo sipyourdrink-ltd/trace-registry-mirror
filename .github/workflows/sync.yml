@@ -2,7 +2,9 @@ name: Sync mirror
 
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    # Twice an hour. The canonical health check runs every 6 hours and reports a
+    # mirror that is merely behind as diverged, so the window has to stay short.
+    - cron: "17,47 * * * *"
   workflow_dispatch:
     inputs:
       selftest:

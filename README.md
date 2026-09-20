@@ -6,7 +6,7 @@ Read-only mirror of [agentrust-io/trace-registry](https://github.com/agentrust-i
 |---|---|
 | Mirrored branch | [`main`](https://github.com/sipyourdrink-ltd/trace-registry-mirror/tree/main), byte-identical to canonical `main` |
 | Head to compare | `https://api.github.com/repos/sipyourdrink-ltd/trace-registry-mirror/commits/main` |
-| Sync | every 6 hours, fast-forward only |
+| Sync | every 30 minutes, fast-forward only |
 | Security contact | forte@bernstein.run |
 | Mirroring since | 2026-09-20 |
 
