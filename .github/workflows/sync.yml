@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
+    inputs:
+      selftest:
+        description: "Prove the push token can write a commit that touches a workflow file (throwaway branch, deleted afterwards). main is not touched."
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -14,6 +19,7 @@ concurrency:
 
 jobs:
   sync:
+    if: ${{ !inputs.selftest }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -46,3 +52,33 @@ jobs:
           auth="$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 | tr -d '\n')"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" push --quiet origin main
           echo "mirror main: $before -> $(git rev-parse HEAD)"
+
+  selftest:
+    if: ${{ inputs.selftest }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Push and delete a throwaway branch whose commit touches a workflow file
+        env:
+          PUSH_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PUSH_TOKEN}" ]; then
+            echo "::error::MIRROR_PUSH_TOKEN is not set"
+            exit 1
+          fi
+          git clone --quiet --branch main --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" probe
+          cd probe
+          git config user.name "mirror selftest"
+          git config user.email "selftest@invalid"
+          mkdir -p .github/workflows
+          printf 'name: selftest-probe\non: workflow_dispatch\njobs: {}\n' > .github/workflows/zz-selftest-probe.yml
+          git add .github/workflows/zz-selftest-probe.yml
+          git commit --quiet -m "selftest probe, never merged"
+          ref="selftest-${GITHUB_RUN_ID}"
+          auth="$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 | tr -d '\n')"
+          push() { git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" push --quiet origin "$@"; }
+          push "HEAD:refs/heads/${ref}"
+          echo "pushed ${ref}: the token can write commits that touch workflow files"
+          push ":refs/heads/${ref}"
+          echo "deleted ${ref}"
