@@ -20,7 +20,7 @@ Read-only mirror of [agentrust-io/trace-registry](https://github.com/agentrust-i
 2. Checks that canonical `main` descends from the mirror's `main`. If it does not, the job fails and the mirror stays where it was. A red run here means canonical history was rewritten, or this mirror was tampered with; either way the two heads are the evidence.
 3. Fast-forwards and pushes.
 
-It pushes with a deploy key, because the default Actions token may not push commits that touch `.github/workflows/`, and canonical `main` does change its workflows.
+It pushes with a token scoped to this one repository, because the default Actions token may not push commits that touch `.github/workflows/`, and canonical `main` does change its workflows (10 of its last 50 commits did).
 
 ## What this mirror does not do
 

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: sync-mirror
@@ -19,17 +19,15 @@ jobs:
     steps:
       - name: Fast-forward main from canonical, refuse a rewrite
         env:
-          DEPLOY_KEY: ${{ secrets.MIRROR_DEPLOY_KEY }}
+          # A token scoped to this one repository with Contents and Workflows
+          # write. The default Actions token may not push commits that touch
+          # .github/workflows/, and canonical main does change its workflows,
+          # so the fallback works only until the next such commit and then
+          # fails loudly rather than silently falling behind.
+          PUSH_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN || github.token }}
         run: |
           set -euo pipefail
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror
-          chmod 600 ~/.ssh/mirror
-          # GitHub's published Ed25519 host key, pinned rather than trusted on first use.
-          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > ~/.ssh/known_hosts
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
-
-          git clone --quiet --branch main "git@github.com:${GITHUB_REPOSITORY}.git" mirror
+          git clone --quiet --branch main "https://github.com/${GITHUB_REPOSITORY}.git" mirror
           cd mirror
           git remote add canonical https://github.com/agentrust-io/trace-registry.git
           git fetch --quiet canonical main
@@ -40,6 +38,11 @@ jobs:
             echo "::error::canonical main ($target) does not descend from mirror main ($before). Possible history rewrite. Mirror left untouched."
             exit 1
           fi
+          if [ "$before" = "$target" ]; then
+            echo "mirror main already at canonical: $target"
+            exit 0
+          fi
           git merge --quiet --ff-only canonical/main
-          git push --quiet origin main
+          auth="$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 | tr -d '\n')"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" push --quiet origin main
           echo "mirror main: $before -> $(git rev-parse HEAD)"
