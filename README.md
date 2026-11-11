@@ -1,6 +1,6 @@
 # trace-registry-mirror
 
-Read-only mirror of [agentrust-io/trace-registry](https://github.com/agentrust-io/trace-registry), operated by Sip Your Drink Ltd, the maintainers of [Bernstein](https://github.com/sipyourdrink-ltd/bernstein). We are independent of OPAQUE Systems.
+Read-only mirror of [agentrust-io/trace-registry](https://github.com/agentrust-io/trace-registry), operated by Alex Chernysh, the maintainer of [Bernstein](https://github.com/sipyourdrink-ltd/bernstein). We are independent of OPAQUE Systems. Alex Chernysh has been a listed Reviewer in the AgenTrust project since 2026-10-15.
 
 | | |
 |---|---|
