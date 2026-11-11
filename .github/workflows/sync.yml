@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       selftest:
-        description: "Prove the push token can write a commit that touches a workflow file (throwaway branch, deleted afterwards). main is not touched."
+        description: "Prove the deploy key can write a commit that touches a workflow file (throwaway branch, deleted afterwards). main is not touched."
         type: boolean
         default: false
 
@@ -27,12 +27,11 @@ jobs:
     steps:
       - name: Fast-forward main from canonical, refuse a rewrite
         env:
-          # A token scoped to this one repository with Contents and Workflows
-          # write. The default Actions token may not push commits that touch
-          # .github/workflows/, and canonical main does change its workflows,
-          # so the fallback works only until the next such commit and then
-          # fails loudly rather than silently falling behind.
-          PUSH_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN || github.token }}
+          # A write deploy key of this one repository. A deploy key does not
+          # expire and may push commits that touch .github/workflows/, which
+          # the default Actions token may not, and canonical main does change
+          # its workflows.
+          DEPLOY_KEY: ${{ secrets.MIRROR_DEPLOY_KEY }}
         run: |
           set -euo pipefail
           git clone --quiet --branch main "https://github.com/${GITHUB_REPOSITORY}.git" mirror
@@ -51,8 +50,12 @@ jobs:
             exit 0
           fi
           git merge --quiet --ff-only canonical/main
-          auth="$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 | tr -d '\n')"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" push --quiet origin main
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/mirror_key"
+          chmod 600 "$HOME/.ssh/mirror_key"
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$HOME/.ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/mirror_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          git push --quiet "git@github.com:${GITHUB_REPOSITORY}.git" HEAD:refs/heads/main
           echo "mirror main: $before -> $(git rev-parse HEAD)"
 
   selftest:
@@ -62,11 +65,11 @@ jobs:
     steps:
       - name: Push and delete a throwaway branch whose commit touches a workflow file
         env:
-          PUSH_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
+          DEPLOY_KEY: ${{ secrets.MIRROR_DEPLOY_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${PUSH_TOKEN}" ]; then
-            echo "::error::MIRROR_PUSH_TOKEN is not set"
+          if [ -z "${DEPLOY_KEY}" ]; then
+            echo "::error::MIRROR_DEPLOY_KEY is not set"
             exit 1
           fi
           git clone --quiet --branch main --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" probe
@@ -78,9 +81,13 @@ jobs:
           git add .github/workflows/zz-selftest-probe.yml
           git commit --quiet -m "selftest probe, never merged"
           ref="selftest-${GITHUB_RUN_ID}"
-          auth="$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 | tr -d '\n')"
-          push() { git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" push --quiet origin "$@"; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/mirror_key"
+          chmod 600 "$HOME/.ssh/mirror_key"
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$HOME/.ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/mirror_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          push() { git push --quiet "git@github.com:${GITHUB_REPOSITORY}.git" "$@"; }
           push "HEAD:refs/heads/${ref}"
-          echo "pushed ${ref}: the token can write commits that touch workflow files"
+          echo "pushed ${ref}: the deploy key can write commits that touch workflow files"
           push ":refs/heads/${ref}"
           echo "deleted ${ref}"
